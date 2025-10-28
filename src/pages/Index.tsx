@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { WebcamSetup } from "@/components/WebcamSetup";
 import { ThemeSelection } from "@/components/ThemeSelection";
@@ -40,6 +40,7 @@ const Index = () => {
   const [currentQuadrants, setCurrentQuadrants] = useState<string[][]>([]);
   const [selectionStageIndex, setSelectionStageIndex] = useState<number>(0);
   const [selectedWord, setSelectedWord] = useState<string>('');
+  const [currentRoundDirection, setCurrentRoundDirection] = useState<Direction | null>(null);
 
   const handleStart = () => {
     setStage('webcam-setup');
@@ -60,30 +61,39 @@ const Index = () => {
     setRemainingWords(words);
     setCurrentQuadrants(initialQuadrants);
     setSelectionStageIndex(initialStageIndex);
+    setCurrentRoundDirection(null);
     setStage('selection');
   };
 
-  const handleSelectionRoundComplete = (direction: Direction) => {
-    const indicesToKeep = getIndicesToKeep(direction);
+  useEffect(() => {
+    if (!currentRoundDirection) {
+      return;
+    }
+
+    const indicesToKeep = getIndicesToKeep(currentRoundDirection);
     const nextWords = indicesToKeep
       .flatMap((index) => currentQuadrants[index] ?? [])
-      .filter((word) => Boolean(word));
-
-    const nextStageIndex = selectionStageIndex + 1;
+      .filter((word): word is string => Boolean(word));
 
     setRemainingWords(nextWords);
 
+    const nextStageIndex = selectionStageIndex + 1;
+
     if (nextWords.length <= 1 || nextStageIndex >= MAX_ROUNDS) {
-      const word = nextWords[0] ?? '';
-      setSelectedWord(word);
+      setSelectedWord(nextWords[0] ?? '');
       setStage('reveal');
+      setCurrentRoundDirection(null);
       return;
     }
 
     const nextQuadrants = distributeWordsIntoQuadrants(nextWords);
-
     setCurrentQuadrants(nextQuadrants);
     setSelectionStageIndex(nextStageIndex);
+    setCurrentRoundDirection(null);
+  }, [currentRoundDirection, currentQuadrants, selectionStageIndex]);
+
+  const handleSelectionRoundComplete = (direction: Direction) => {
+    setCurrentRoundDirection(direction);
   };
 
   const handleRestart = () => {
@@ -94,6 +104,7 @@ const Index = () => {
     setCurrentQuadrants([]);
     setSelectionStageIndex(0);
     setSelectedWord('');
+    setCurrentRoundDirection(null);
     
     // Clean up WebGazer
     // @ts-ignore
@@ -108,67 +119,7 @@ const Index = () => {
       {stage === 'welcome' && <WelcomeScreen onStart={handleStart} />}
       {stage === 'webcam-setup' && <WebcamSetup onComplete={handleWebcamComplete} />}
       {stage === 'theme-selection' && <ThemeSelection onSelect={handleThemeSelect} />}
-      {stage === 'selection' && remainingWords.length > 0 && (
-        <Countdown
-          key={`${selectionStageIndex}-${remainingWords.length}`}
-          quadrants={currentQuadrants}
-          onComplete={handleSelectionRoundComplete}
-          duration={7}
-          round={selectionStageIndex + 1}
-        />
-      )}
-      {stage === 'reveal' && <MindReveal word={selectedWord} onRestart={handleRestart} />}
-    </>
-  );
-};
-
-export default Index;
-    if (nextWords.length <= 1) {
-      const word = nextWords[0] ?? '';
-      setSelectedWord(word);
-      setStage('reveal');
-      return;
-    }
-
-    const nextStageIndex = selectionStageIndex + 1;
-    if (nextStageIndex >= STAGE_QUADRANT_COUNTS.length) {
-      const word = nextWords[0] ?? '';
-      setSelectedWord(word);
-      setStage('reveal');
-      return;
-    }
-
-    const nextQuadrantCount = STAGE_QUADRANT_COUNTS[nextStageIndex];
-    const nextQuadrants = distributeWordsIntoQuadrants(nextWords, nextQuadrantCount);
-
-    setRemainingWords(nextWords);
-    setCurrentQuadrants(nextQuadrants);
-    setSelectionStageIndex(nextStageIndex);
-  };
-
-  const handleRestart = () => {
-    setStage('welcome');
-    setSelectedTheme(null);
-    setAllWords([]);
-    setRemainingWords([]);
-    setCurrentQuadrants([]);
-    setSelectionStageIndex(0);
-    setSelectedWord('');
-    
-    // Clean up WebGazer
-    // @ts-ignore
-    if (window.webgazer) {
-      // @ts-ignore
-      window.webgazer.end();
-    }
-  };
-
-  return (
-    <>
-      {stage === 'welcome' && <WelcomeScreen onStart={handleStart} />}
-      {stage === 'webcam-setup' && <WebcamSetup onComplete={handleWebcamComplete} />}
-      {stage === 'theme-selection' && <ThemeSelection onSelect={handleThemeSelect} />}
-      {stage === 'selection' && remainingWords.length > 0 && (
+      {stage === 'selection' && remainingWords.length > 0 && currentRoundDirection === null && (
         <Countdown
           key={`${selectionStageIndex}-${remainingWords.length}`}
           quadrants={currentQuadrants}
