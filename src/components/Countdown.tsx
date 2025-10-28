@@ -14,39 +14,14 @@ interface Sample {
   x: number;
 }
 
-const SAMPLE_WINDOW_MS = 2500;
-const MOVEMENT_THRESHOLD = 40;
-const MIN_SAMPLES = 15;
-
-const average = (values: number[]) =>
-  values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
-
-const inferDirection = (samples: Sample[]): Direction | null => {
-  if (samples.length < MIN_SAMPLES) {
-    return null;
-  }
-
-  const windowSize = Math.max(5, Math.floor(samples.length * 0.2));
-  const firstWindow = samples.slice(0, windowSize).map((sample) => sample.x);
-  const lastWindow = samples.slice(-windowSize).map((sample) => sample.x);
-
-  if (firstWindow.length === 0 || lastWindow.length === 0) {
-    return null;
-  }
-
-  const delta = average(lastWindow) - average(firstWindow);
-
-  if (Math.abs(delta) < MOVEMENT_THRESHOLD) {
-    return null;
-  }
-
-  return delta > 0 ? "right" : "left";
-};
+const DIRECTION_THRESHOLD = 35;
+const MAX_SAMPLE_INTERVAL = 500;
+const HIGHLIGHT_MIN_TIME = 250;
 
 export const Countdown = ({
   quadrants,
   onComplete,
-  duration = 3,
+  duration = 7,
   round,
 }: CountdownProps) => {
   const [count, setCount] = useState(duration);
@@ -56,6 +31,9 @@ export const Countdown = ({
   const [inferredDirection, setInferredDirection] = useState<Direction | null>(null);
 
   const samplesRef = useRef<Sample[]>([]);
+  const lastSampleRef = useRef<Sample | null>(null);
+  const directionTimesRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
+  const sumRef = useRef<number>(0);
   const hasCompletedRef = useRef(false);
 
   useEffect(() => {
@@ -90,11 +68,17 @@ export const Countdown = ({
     setIsTracking(false);
     setIsCountingDown(false);
 
+    const { left, right } = directionTimesRef.current;
+    const trackedDirection =
+      left === 0 && right === 0 ? null : right >= left ? "right" : "left";
+
     const finalDirection =
       manualDirection ??
+      trackedDirection ??
       inferredDirection ??
       (Math.random() > 0.5 ? "right" : "left");
 
+    setInferredDirection(finalDirection);
     onComplete(finalDirection);
   }, [count, isCountingDown, inferredDirection, manualDirection, onComplete]);
 
@@ -106,21 +90,49 @@ export const Countdown = ({
     }
 
     samplesRef.current = [];
+    lastSampleRef.current = null;
+    directionTimesRef.current = { left: 0, right: 0 };
+    sumRef.current = 0;
     const listener = (data: { x?: number } | null) => {
       if (!data || typeof data.x !== "number") {
         return;
       }
 
       const now = Date.now();
-      samplesRef.current.push({ time: now, x: data.x });
+      const x = data.x;
 
-      const cutoff = now - SAMPLE_WINDOW_MS;
-      while (samplesRef.current.length > 0 && samplesRef.current[0].time < cutoff) {
-        samplesRef.current.shift();
+      samplesRef.current.push({ time: now, x });
+      sumRef.current += x;
+
+      const lastSample = lastSampleRef.current;
+      if (lastSample) {
+        const elapsed = now - lastSample.time;
+        if (elapsed > 0 && elapsed < MAX_SAMPLE_INTERVAL) {
+          const center = sumRef.current / samplesRef.current.length;
+          const averageX = (lastSample.x + x) / 2;
+          const offset = averageX - center;
+
+          if (Math.abs(offset) >= DIRECTION_THRESHOLD) {
+            if (offset > 0) {
+              directionTimesRef.current.right += elapsed;
+            } else {
+              directionTimesRef.current.left += elapsed;
+            }
+          }
+        }
       }
 
-      const detected = inferDirection(samplesRef.current);
-      setInferredDirection(detected);
+      lastSampleRef.current = { time: now, x };
+
+      const { left, right } = directionTimesRef.current;
+      const dominant =
+        Math.max(left, right) >= HIGHLIGHT_MIN_TIME
+          ? right >= left
+            ? "right"
+            : "left"
+          : null;
+
+      setInferredDirection(dominant);
     };
 
     const webgazer = (window as any).webgazer;
