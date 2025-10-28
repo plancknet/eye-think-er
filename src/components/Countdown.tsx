@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WordGrid } from "./WordGrid";
 import { Direction } from "@/types/mindreader";
 
@@ -30,10 +30,10 @@ export const Countdown = ({
   const [isTracking, setIsTracking] = useState(false);
   const [manualDirection, setManualDirection] = useState<Direction | null>(null);
   const [inferredDirection, setInferredDirection] = useState<Direction | null>(null);
-  const [debugCursor, setDebugCursor] = useState<{ x: number; y: number; visible: boolean }>({
+  const [debugCursor, setDebugCursor] = useState<{ x: number; y: number; opacity: number }>({
     x: 0,
     y: 0,
-    visible: false,
+    opacity: 0,
   });
 
   const samplesRef = useRef<Sample[]>([]);
@@ -175,41 +175,55 @@ export const Countdown = ({
     [quadrants]
   );
 
+  const moveDebugCursor = useCallback(
+    (direction: Direction | null, visible: boolean) => {
+      const element = containerRef.current;
+      if (!element) return;
+
+      const rect = element.getBoundingClientRect();
+
+      let targetClientX = rect.left + rect.width / 2;
+      if (direction === "left") {
+        targetClientX = rect.left + rect.width * 0.2;
+      } else if (direction === "right") {
+        targetClientX = rect.right - rect.width * 0.2;
+      }
+
+      const targetClientY = rect.top + rect.height * 0.5;
+
+      const relativeX = targetClientX - rect.left;
+      const relativeY = targetClientY - rect.top;
+
+      setDebugCursor({
+        x: relativeX,
+        y: relativeY,
+        opacity: visible ? 1 : 0,
+      });
+
+      if (visible) {
+        const simulatedMove = new MouseEvent("mousemove", {
+          clientX: targetClientX,
+          clientY: targetClientY,
+          bubbles: true,
+        });
+        window.dispatchEvent(simulatedMove);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
-    const element = containerRef.current;
-    if (!element) {
-      setDebugCursor((prev) => ({ ...prev, visible: false }));
-      return;
-    }
-
     if (!highlightedDirection) {
-      setDebugCursor((prev) => ({ ...prev, visible: false }));
+      moveDebugCursor(null, false);
       return;
     }
 
-    const rect = element.getBoundingClientRect();
-    const targetClientX =
-      highlightedDirection === "left"
-        ? rect.left + rect.width * 0.2
-        : rect.right - rect.width * 0.2;
-    const targetClientY = rect.top + rect.height * 0.5;
+    moveDebugCursor(highlightedDirection, true);
+  }, [highlightedDirection, moveDebugCursor]);
 
-    const relativeX = targetClientX - rect.left;
-    const relativeY = targetClientY - rect.top;
-
-    setDebugCursor({
-      x: relativeX,
-      y: relativeY,
-      visible: true,
-    });
-
-    const simulatedMove = new MouseEvent("mousemove", {
-      clientX: targetClientX,
-      clientY: targetClientY,
-      bubbles: true,
-    });
-    window.dispatchEvent(simulatedMove);
-  }, [highlightedDirection]);
+  useEffect(() => {
+    moveDebugCursor(null, false);
+  }, [round, moveDebugCursor]);
 
   const handleManualChoice = (direction: Direction) => {
     setManualDirection(direction);
@@ -227,12 +241,10 @@ export const Countdown = ({
         isTracking={isTracking && count > 0}
       />
 
-      {debugCursor.visible && (
-        <div
-          className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/60 shadow-lg transition-transform duration-300"
-          style={{ left: debugCursor.x, top: debugCursor.y }}
-        />
-      )}
+      <div
+        className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/60 shadow-lg transition-transform duration-300"
+        style={{ left: debugCursor.x, top: debugCursor.y, opacity: debugCursor.opacity }}
+      />
 
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6">
         <div className="space-y-4 text-center max-w-xl animate-fade-in">
