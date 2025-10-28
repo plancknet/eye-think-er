@@ -188,21 +188,24 @@ export const Countdown = ({
     }
 
     const rect = element.getBoundingClientRect();
-    const targetX =
+    const targetClientX =
       highlightedDirection === "left"
         ? rect.left + rect.width * 0.2
         : rect.right - rect.width * 0.2;
-    const targetY = rect.top + rect.height * 0.5;
+    const targetClientY = rect.top + rect.height * 0.5;
+
+    const relativeX = targetClientX - rect.left;
+    const relativeY = targetClientY - rect.top;
 
     setDebugCursor({
-      x: targetX,
-      y: targetY,
+      x: relativeX,
+      y: relativeY,
       visible: true,
     });
 
     const simulatedMove = new MouseEvent("mousemove", {
-      clientX: targetX,
-      clientY: targetY,
+      clientX: targetClientX,
+      clientY: targetClientY,
       bubbles: true,
     });
     window.dispatchEvent(simulatedMove);
@@ -226,7 +229,7 @@ export const Countdown = ({
 
       {debugCursor.visible && (
         <div
-          className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/40 shadow-lg transition-all duration-300"
+          className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/60 shadow-lg transition-transform duration-300"
           style={{ left: debugCursor.x, top: debugCursor.y }}
         />
       )}
