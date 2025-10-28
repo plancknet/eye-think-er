@@ -67,16 +67,16 @@ export const WordGrid = ({
   const isFinalPair = quadrants.length === 2;
 
   const containerClasses = isFinalPair
-    ? "grid h-full w-full grid-cols-2 grid-rows-1 items-center justify-items-stretch gap-6 px-12 sm:px-24 lg:px-40"
-    : "grid h-full w-full grid-cols-2 grid-rows-2 items-stretch justify-items-stretch gap-6 sm:gap-10 px-8 sm:px-16 lg:px-28 py-8 sm:py-16";
+    ? "grid h-full w-full grid-cols-1 sm:grid-cols-2 grid-rows-2 sm:grid-rows-1 items-stretch justify-items-stretch gap-4 sm:gap-6 lg:gap-10 px-4 sm:px-8 lg:px-16 py-4 sm:py-8"
+    : "grid h-full w-full grid-cols-1 sm:grid-cols-2 grid-rows-4 sm:grid-rows-2 items-stretch justify-items-stretch gap-4 sm:gap-6 lg:gap-10 px-4 sm:px-10 lg:px-16 py-4 sm:py-10";
 
   const positionClasses = isFinalPair
-    ? ["justify-self-start self-center", "justify-self-end self-center"]
+    ? ["justify-self-stretch self-end sm:self-stretch", "justify-self-stretch self-start sm:self-stretch"]
     : [
-        "justify-self-start self-start",
-        "justify-self-end self-start",
-        "justify-self-start self-end",
-        "justify-self-end self-end",
+        "justify-self-stretch self-end sm:self-start",
+        "justify-self-stretch self-end sm:self-start",
+        "justify-self-stretch self-start sm:self-end",
+        "justify-self-stretch self-start sm:self-end",
       ];
 
   return (
@@ -95,16 +95,17 @@ export const WordGrid = ({
             onMouseLeave={handleQuadrantLeave}
             className={`
               ${quadrantClass} ${positioning}
-              rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex items-center justify-center
+              rounded-xl sm:rounded-2xl lg:rounded-3xl p-3 sm:p-5 lg:p-6 xl:p-8 flex items-center justify-center
               transition-all duration-300
-              ${highlighted ? "scale-105 shadow-2xl ring-2 sm:ring-4 ring-white/50" : "scale-100"}
-              ${isTracking ? "cursor-default" : "cursor-pointer hover:scale-105"}
-              min-h-[120px] sm:min-h-0
+              ${highlighted ? "shadow-2xl ring-2 sm:ring-4 ring-white/40 scale-[1.02]" : "shadow-lg scale-100"}
+              ${isTracking ? "cursor-default" : "cursor-pointer hover:scale-[1.03]"}
+              min-h-[120px] sm:min-h-[160px]
+              overflow-hidden
               `}
           >
-            <div className="space-y-2 sm:space-y-4 text-center">
+            <div className="flex max-h-full w-full flex-col items-center justify-center space-y-2 sm:space-y-3 lg:space-y-4 text-center overflow-hidden">
               {words.length === 0 && (
-                <div className="text-white/60 text-lg sm:text-xl md:text-2xl font-semibold tracking-wide">
+                <div className="text-white/60 text-base sm:text-lg md:text-xl font-semibold tracking-wide">
                   -
                 </div>
               )}
@@ -112,10 +113,10 @@ export const WordGrid = ({
                 <div
                   key={`${quadrantIndex}-${idx}`}
                   className={`
-                    text-white font-bold backdrop-blur-sm bg-black/20 rounded-lg sm:rounded-xl p-2 sm:p-4
+                    text-white font-semibold sm:font-bold backdrop-blur-sm bg-black/15 rounded-md sm:rounded-lg px-3 py-2 sm:px-4 sm:py-3 lg:px-5 lg:py-4 max-w-full break-words
                     transition-all duration-300
-                    ${words.length <= 1 ? "text-2xl sm:text-3xl md:text-4xl lg:text-5xl px-3 py-2 sm:px-6 sm:py-4 md:px-8 md:py-6" : "text-xl sm:text-2xl md:text-3xl"}
-                    ${highlighted ? "scale-110" : "scale-100"}
+                    ${words.length <= 1 ? "text-xl sm:text-2xl md:text-3xl lg:text-4xl" : "text-base sm:text-lg md:text-xl lg:text-2xl"}
+                    ${highlighted ? "scale-[1.04]" : "scale-100"}
                   `}
                 >
                   {word}
