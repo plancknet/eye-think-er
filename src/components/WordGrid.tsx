@@ -15,6 +15,13 @@ const quadrantClasses = [
   "quadrant-4",
 ];
 
+const getWordFontClass = (count: number) => {
+  if (count >= 4) return "text-base sm:text-lg lg:text-xl";
+  if (count === 3) return "text-lg sm:text-xl lg:text-2xl";
+  if (count === 2) return "text-xl sm:text-2xl lg:text-3xl";
+  return "text-2xl sm:text-3xl lg:text-4xl";
+};
+
 export const WordGrid = ({
   quadrants,
   onDirectionChoice,
@@ -66,66 +73,86 @@ export const WordGrid = ({
 
   const isFinalPair = quadrants.length === 2;
 
-  const containerClasses = isFinalPair
-    ? "grid h-full w-full grid-cols-1 sm:grid-cols-2 grid-rows-2 sm:grid-rows-1 items-stretch justify-items-stretch gap-4 sm:gap-6 lg:gap-10 px-4 sm:px-8 lg:px-16 py-4 sm:py-8"
-    : "grid h-full w-full grid-cols-1 sm:grid-cols-2 grid-rows-4 sm:grid-rows-2 items-stretch justify-items-stretch gap-4 sm:gap-6 lg:gap-10 px-4 sm:px-10 lg:px-16 py-4 sm:py-10";
-
-  const positionClasses = isFinalPair
-    ? ["justify-self-stretch self-end sm:self-stretch", "justify-self-stretch self-start sm:self-stretch"]
+  const desktopPositions = isFinalPair
+    ? [
+        "sm:col-start-1 sm:col-end-2 sm:row-start-2 sm:row-end-3 justify-self-stretch self-stretch",
+        "sm:col-start-3 sm:col-end-4 sm:row-start-2 sm:row-end-3 justify-self-stretch self-stretch",
+      ]
     : [
-        "justify-self-stretch self-end sm:self-start",
-        "justify-self-stretch self-end sm:self-start",
-        "justify-self-stretch self-start sm:self-end",
-        "justify-self-stretch self-start sm:self-end",
+        "sm:col-start-1 sm:col-end-2 sm:row-start-1 sm:row-end-2 justify-self-stretch self-stretch",
+        "sm:col-start-3 sm:col-end-4 sm:row-start-1 sm:row-end-2 justify-self-stretch self-stretch",
+        "sm:col-start-1 sm:col-end-2 sm:row-start-3 sm:row-end-4 justify-self-stretch self-stretch",
+        "sm:col-start-3 sm:col-end-4 sm:row-start-3 sm:row-end-4 justify-self-stretch self-stretch",
       ];
 
-  return (
-    <div className={`word-grid-container pointer-events-auto absolute inset-0 z-10 ${containerClasses}`}>
-      {quadrants.map((words, quadrantIndex) => {
-        const highlighted = isQuadrantHighlighted(quadrantIndex);
-        const quadrantClass = quadrantClasses[quadrantIndex % quadrantClasses.length];
-        const positioning = positionClasses[quadrantIndex] ?? "";
+  const renderQuadrantButton = (quadrantIndex: number, extraClasses: string, key: string) => {
+    const words = quadrants[quadrantIndex] ?? [];
+    const highlighted = isQuadrantHighlighted(quadrantIndex);
+    const quadrantClass = quadrantClasses[quadrantIndex % quadrantClasses.length];
 
-        return (
-          <button
-            key={quadrantIndex}
-            type="button"
-            onClick={() => handleQuadrantClick(quadrantIndex)}
-            onMouseEnter={() => handleQuadrantEnter(quadrantIndex)}
-            onMouseLeave={handleQuadrantLeave}
-            className={`
-              ${quadrantClass} ${positioning}
-              rounded-xl sm:rounded-2xl lg:rounded-3xl p-3 sm:p-5 lg:p-6 xl:p-8 flex items-center justify-center
-              transition-all duration-300
-              ${highlighted ? "shadow-2xl ring-2 sm:ring-4 ring-white/40 scale-[1.02]" : "shadow-lg scale-100"}
-              ${isTracking ? "cursor-default" : "cursor-pointer hover:scale-[1.03]"}
-              min-h-[120px] sm:min-h-[160px]
-              overflow-hidden
-              `}
-          >
-            <div className="flex max-h-full w-full flex-col items-center justify-center space-y-2 sm:space-y-3 lg:space-y-4 text-center overflow-hidden">
-              {words.length === 0 && (
-                <div className="text-white/60 text-base sm:text-lg md:text-xl font-semibold tracking-wide">
-                  -
-                </div>
-              )}
-              {words.map((word, idx) => (
-                <div
-                  key={`${quadrantIndex}-${idx}`}
-                  className={`
-                    text-white font-semibold sm:font-bold backdrop-blur-sm bg-black/15 rounded-md sm:rounded-lg px-3 py-2 sm:px-4 sm:py-3 lg:px-5 lg:py-4 max-w-full break-words
-                    transition-all duration-300
-                    ${words.length <= 1 ? "text-xl sm:text-2xl md:text-3xl lg:text-4xl" : "text-base sm:text-lg md:text-xl lg:text-2xl"}
-                    ${highlighted ? "scale-[1.04]" : "scale-100"}
-                  `}
-                >
-                  {word}
-                </div>
-              ))}
+    const highlightClasses = highlighted
+      ? "ring-2 ring-white/50 shadow-[0_20px_45px_rgba(15,23,42,0.45)]"
+      : "ring-1 ring-white/15 shadow-[0_12px_32px_rgba(15,23,42,0.25)]";
+
+    const wordFontClass = getWordFontClass(words.length);
+
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => handleQuadrantClick(quadrantIndex)}
+        onMouseEnter={() => handleQuadrantEnter(quadrantIndex)}
+        onMouseLeave={handleQuadrantLeave}
+        className={`
+          ${quadrantClass} ${extraClasses}
+          relative flex flex-col items-center justify-center
+          rounded-xl sm:rounded-2xl lg:rounded-3xl
+          px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8
+          transition-all duration-300
+          ${highlightClasses}
+          ${isTracking ? "cursor-default" : "cursor-pointer hover:scale-[1.02]"}
+          min-h-[140px] sm:min-h-[220px] lg:min-h-[260px]
+          max-w-full overflow-hidden
+          backdrop-blur-sm
+        `}
+      >
+        <div className="flex w-full flex-col items-center justify-center gap-3 lg:gap-4 text-center">
+          {words.length === 0 && (
+            <div className="text-white/70 text-base sm:text-lg font-semibold tracking-wide">
+              -
             </div>
-          </button>
-        );
-      })}
+          )}
+          {words.map((word, idx) => (
+            <div
+              key={`${quadrantIndex}-${idx}`}
+              className={`
+                w-full max-w-full rounded-lg sm:rounded-xl
+                bg-black/30 px-3 py-2 sm:px-4 sm:py-3 lg:px-5 lg:py-4
+                text-white font-semibold leading-tight tracking-tight
+                ${wordFontClass}
+                transition-all duration-300
+                ${highlighted ? "scale-[1.02] bg-black/40" : "scale-100"}
+              `}
+            >
+              <span className="block break-words">{word}</span>
+            </div>
+          ))}
+        </div>
+      </button>
+    );
+  };
+
+  return (
+    <div className="word-grid-container pointer-events-auto absolute inset-0 z-10">
+      <div className="sm:hidden flex h-full flex-col gap-4 overflow-y-auto px-4 pt-4 pb-40">
+        {quadrants.map((_, idx) => renderQuadrantButton(idx, "", `mobile-${idx}`))}
+      </div>
+
+      <div className="hidden h-full w-full sm:grid grid-cols-3 grid-rows-3 gap-5 md:gap-8 px-6 md:px-12 lg:px-16 py-8 md:py-12">
+        {quadrants.map((_, idx) =>
+          renderQuadrantButton(idx, desktopPositions[idx] ?? "", `desktop-${idx}`)
+        )}
+      </div>
     </div>
   );
 };
