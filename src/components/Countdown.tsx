@@ -119,6 +119,10 @@ export const Countdown = ({
           const offset = averageX - center;
 
           if (Math.abs(offset) >= DIRECTION_THRESHOLD) {
+            const offsetDirection: Direction = offset > 0 ? "right" : "left";
+
+            setInferredDirection((prev) => (prev === offsetDirection ? prev : offsetDirection));
+
             if (offset > 0) {
               directionTimesRef.current.right += elapsed;
             } else {
