@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 import { WordGrid } from "./WordGrid";
 import { Direction } from "@/types/mindreader";
 
