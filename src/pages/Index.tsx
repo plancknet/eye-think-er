@@ -124,7 +124,6 @@ const Index = () => {
           key={`${selectionStageIndex}-${remainingWords.length}`}
           quadrants={currentQuadrants}
           onComplete={handleSelectionRoundComplete}
-          duration={7}
           round={selectionStageIndex + 1}
         />
       )}

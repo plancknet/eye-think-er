@@ -1,23 +1,87 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { WordGrid } from "./WordGrid";
 import { Direction } from "@/types/mindreader";
 
 interface CountdownProps {
   quadrants: string[][];
   onComplete: (direction: Direction) => void;
-  duration?: number;
   round?: number;
 }
 
-interface Sample {
-  time: number;
-  x: number;
-}
-
-const ACTIVATION_THRESHOLD = 55;
-const MAINTAIN_THRESHOLD = 20;
-const MAX_SAMPLE_INTERVAL = 500;
+const HEAD_ROTATION_THRESHOLD = 0.07;
 const STABLE_DIRECTION_DURATION_MS = 3000;
+const VIDEO_WIDTH = 1280;
+const VIDEO_HEIGHT = 720;
+const VISION_WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+const MODEL_ASSET_PATH =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+let faceLandmarkerInstance: FaceLandmarker | null = null;
+let faceLandmarkerPromise: Promise<FaceLandmarker> | null = null;
+
+const loadFaceLandmarker = async () => {
+  if (faceLandmarkerInstance) {
+    return faceLandmarkerInstance;
+  }
+
+  if (!faceLandmarkerPromise) {
+    faceLandmarkerPromise = (async () => {
+      const vision = await FilesetResolver.forVisionTasks(VISION_WASM_PATH);
+      faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: MODEL_ASSET_PATH,
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+      });
+      return faceLandmarkerInstance;
+    })();
+  }
+
+  return faceLandmarkerPromise;
+};
+
+let sharedVideoElement: HTMLVideoElement | null = null;
+let sharedVideoPromise: Promise<HTMLVideoElement> | null = null;
+
+const getSharedVideoElement = async () => {
+  if (sharedVideoElement && sharedVideoElement.readyState >= 2) {
+    return sharedVideoElement;
+  }
+
+  if (!sharedVideoPromise) {
+    sharedVideoPromise = (async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: VIDEO_WIDTH,
+          height: VIDEO_HEIGHT,
+        },
+      });
+
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      video.style.position = "fixed";
+      video.style.opacity = "0";
+      video.style.pointerEvents = "none";
+      video.style.width = "1px";
+      video.style.height = "1px";
+
+      document.body.appendChild(video);
+
+      await video.play();
+      sharedVideoElement = video;
+      return video;
+    })();
+  }
+
+  return sharedVideoPromise;
+};
 
 export const Countdown = ({
   quadrants,
@@ -25,14 +89,14 @@ export const Countdown = ({
   round,
 }: CountdownProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const samplesRef = useRef<Sample[]>([]);
-  const lastSampleRef = useRef<Sample | null>(null);
-  const sumRef = useRef<number>(0);
+  const landmarkerRef = useRef<FaceLandmarker | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const frameRef = useRef<number | null>(null);
   const activeDirectionRef = useRef<Direction | null>(null);
   const directionStartRef = useRef<number | null>(null);
   const hasCompletedRef = useRef(false);
 
-  const [isTracking, setIsTracking] = useState(true);
+  const [isTracking, setIsTracking] = useState(false);
   const [manualDirection, setManualDirection] = useState<Direction | null>(null);
   const [detectedDirection, setDetectedDirection] = useState<Direction | null>(null);
   const [holdDuration, setHoldDuration] = useState<number>(0);
@@ -42,91 +106,123 @@ export const Countdown = ({
     opacity: 0,
   });
 
-  useEffect(() => {
-    setIsTracking(true);
-    hasCompletedRef.current = false;
-    samplesRef.current = [];
-    lastSampleRef.current = null;
-    sumRef.current = 0;
+  const resetTrackingState = useCallback(() => {
     activeDirectionRef.current = null;
     directionStartRef.current = null;
-    setDetectedDirection(null);
     setHoldDuration(0);
+    setDetectedDirection(null);
+  }, []);
 
-    const listener = (data: { x?: number } | null) => {
-      if (!data || typeof data.x !== "number" || hasCompletedRef.current) {
-        return;
-      }
+  useEffect(() => {
+    let cancelled = false;
 
-      const now = Date.now();
-      const x = data.x;
+    const initialize = async () => {
+      try {
+        const landmarker = await loadFaceLandmarker();
+        const video = await getSharedVideoElement();
 
-      samplesRef.current.push({ time: now, x });
-      sumRef.current += x;
+        if (cancelled) {
+          return;
+        }
 
-      const lastSample = lastSampleRef.current;
-      if (lastSample) {
-        const elapsed = now - lastSample.time;
-        if (elapsed > 0 && elapsed < MAX_SAMPLE_INTERVAL) {
-          const center = sumRef.current / samplesRef.current.length;
-          const averageX = (lastSample.x + x) / 2;
-          const offset = averageX - center;
-          const magnitude = Math.abs(offset);
+        landmarkerRef.current = landmarker;
+        videoRef.current = video;
 
-          const offsetDirection: Direction = offset >= 0 ? "right" : "left";
-          const sameDirection = activeDirectionRef.current === offsetDirection;
+        hasCompletedRef.current = false;
+        setManualDirection(null);
+        resetTrackingState();
+        setIsTracking(true);
 
-          if (magnitude >= ACTIVATION_THRESHOLD) {
-            setDetectedDirection((prev) => (prev === offsetDirection ? prev : offsetDirection));
+        const detect = () => {
+          if (cancelled || hasCompletedRef.current) {
+            return;
+          }
 
-            if (!sameDirection) {
-              activeDirectionRef.current = offsetDirection;
-              directionStartRef.current = now;
-              setHoldDuration(0);
-            } else if (directionStartRef.current != null) {
-              const heldFor = now - directionStartRef.current;
-              setHoldDuration(heldFor);
+          const landmarkerInstance = landmarkerRef.current;
+          const videoElement = videoRef.current;
 
-              if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
-                hasCompletedRef.current = true;
-                setIsTracking(false);
-                onComplete(offsetDirection);
+          if (!landmarkerInstance || !videoElement || videoElement.readyState < 2) {
+            frameRef.current = requestAnimationFrame(detect);
+            return;
+          }
+
+          const startTime = performance.now();
+          const results = landmarkerInstance.detectForVideo(videoElement, startTime);
+
+          if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+            const landmarks = results.faceLandmarks[0];
+
+            const noseTip = landmarks[1];
+            const leftEyeInner = landmarks[133];
+            const rightEyeInner = landmarks[362];
+
+            const faceCenterX = (leftEyeInner.x + rightEyeInner.x) / 2;
+            const noseOffset = noseTip.x - faceCenterX;
+            const faceWidth = Math.abs(rightEyeInner.x - leftEyeInner.x);
+            const rotationRatio = noseOffset / (faceWidth * 0.5);
+
+            let zone: Direction | "center" = "center";
+
+            if (rotationRatio < -HEAD_ROTATION_THRESHOLD) {
+              zone = "left";
+            } else if (rotationRatio > HEAD_ROTATION_THRESHOLD) {
+              zone = "right";
+            }
+
+            if (zone === "center") {
+              if (activeDirectionRef.current !== null) {
+                resetTrackingState();
+              }
+            } else {
+              setDetectedDirection((prev) => (prev === zone ? prev : zone));
+
+              const now = Date.now();
+              if (activeDirectionRef.current !== zone) {
+                activeDirectionRef.current = zone;
+                directionStartRef.current = now;
+                setHoldDuration(0);
+              } else if (directionStartRef.current != null) {
+                const heldFor = now - directionStartRef.current;
+                setHoldDuration((current) =>
+                  Math.abs(current - heldFor) > 50 ? heldFor : current
+                );
+
+                if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
+                  hasCompletedRef.current = true;
+                  setIsTracking(false);
+                  onComplete(zone);
+                  return;
+                }
               }
             }
-          } else if (sameDirection && magnitude >= MAINTAIN_THRESHOLD && directionStartRef.current != null) {
-            setDetectedDirection(offsetDirection);
-            const heldFor = now - directionStartRef.current;
-            setHoldDuration(heldFor);
-
-            if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
-              hasCompletedRef.current = true;
-              setIsTracking(false);
-              onComplete(offsetDirection);
-            }
-          } else {
-            activeDirectionRef.current = null;
-            directionStartRef.current = null;
-            setHoldDuration(0);
-            setDetectedDirection(null);
+          } else if (activeDirectionRef.current !== null) {
+            resetTrackingState();
           }
+
+          frameRef.current = requestAnimationFrame(detect);
+        };
+
+        frameRef.current = requestAnimationFrame(detect);
+      } catch (error) {
+        console.error("Head pose initialization failed:", error);
+        if (!cancelled) {
+          resetTrackingState();
+          setIsTracking(false);
         }
       }
-
-      lastSampleRef.current = { time: now, x };
     };
 
-    const webgazer = (window as any).webgazer;
-    if (webgazer?.setGazeListener) {
-      webgazer.setGazeListener(listener);
-    }
+    initialize();
 
     return () => {
-      const wg = (window as any).webgazer;
-      if (wg?.setGazeListener) {
-        wg.setGazeListener(null);
+      cancelled = true;
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
       }
+      setIsTracking(false);
     };
-  }, [onComplete]);
+  }, [onComplete, resetTrackingState, round]);
 
   const highlightedDirection = useMemo<Direction | null>(() => {
     if (manualDirection) {
