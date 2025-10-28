@@ -93,7 +93,7 @@ export const WordGrid = ({
         onMouseLeave={handleQuadrantLeave}
         className={`
           ${quadrantClass} ${extraClasses}
-          relative flex min-h-[140px] w-full flex-col
+          relative flex h-full w-full flex-col
           rounded-xl sm:rounded-2xl lg:rounded-3xl
           px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7
           transition-all duration-300
@@ -102,28 +102,29 @@ export const WordGrid = ({
           max-w-full overflow-hidden backdrop-blur-sm bg-white/10
         `}
       >
-        <div className="flex-1 w-full overflow-auto">
-          <div className="flex w-full flex-col items-center justify-center gap-3 lg:gap-4 text-center pb-1">
-            {words.length === 0 && (
+        <div className="flex-1 w-full overflow-hidden">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 lg:gap-4 text-center overflow-auto pb-1">
+            {words.length === 0 ? (
               <div className="text-white/70 text-base sm:text-lg font-semibold tracking-wide">
                 -
               </div>
+            ) : (
+              words.map((word, idx) => (
+                <div
+                  key={`${quadrantIndex}-${idx}`}
+                  className={`
+                    w-full max-w-full rounded-lg sm:rounded-xl
+                    bg-black/30 px-3 py-2 sm:px-4 sm:py-3 lg:px-5 lg:py-4
+                    text-white font-semibold leading-tight tracking-tight
+                    ${wordFontClass}
+                    transition-all duration-300
+                    ${highlighted ? "scale-[1.02] bg-black/40" : "scale-100"}
+                  `}
+                >
+                  <span className="block break-words">{word}</span>
+                </div>
+              ))
             )}
-          {words.map((word, idx) => (
-            <div
-              key={`${quadrantIndex}-${idx}`}
-              className={`
-                w-full max-w-full rounded-lg sm:rounded-xl
-                bg-black/30 px-3 py-2 sm:px-4 sm:py-3 lg:px-5 lg:py-4
-                text-white font-semibold leading-tight tracking-tight
-                ${wordFontClass}
-                transition-all duration-300
-                ${highlighted ? "scale-[1.02] bg-black/40" : "scale-100"}
-              `}
-            >
-              <span className="block break-words">{word}</span>
-            </div>
-          ))}
           </div>
         </div>
       </button>
@@ -137,46 +138,20 @@ export const WordGrid = ({
       </div>
 
       {!isFinalPair && (
-        <div className="hidden h-full w-full sm:flex flex-col justify-between gap-8 px-8 md:px-14 lg:px-20 py-12 md:py-16">
-          <div className="flex flex-1 min-h-0 items-start justify-between gap-8">
-            {renderQuadrantButton(
-              0,
-              "sm:flex-1 sm:max-w-[320px] lg:max-w-[360px] xl:max-w-[420px] min-h-0",
-              "desktop-0"
-            )}
-            {renderQuadrantButton(
-              1,
-              "sm:flex-1 sm:max-w-[320px] lg:max-w-[360px] xl:max-w-[420px] min-h-0",
-              "desktop-1"
-            )}
-          </div>
-          <div className="flex flex-1 min-h-0 items-end justify-between gap-8">
-            {renderQuadrantButton(
-              2,
-              "sm:flex-1 sm:max-w-[320px] lg:max-w-[360px] xl:max-w-[420px] min-h-0",
-              "desktop-2"
-            )}
-            {renderQuadrantButton(
-              3,
-              "sm:flex-1 sm:max-w-[320px] lg:max-w-[360px] xl:max-w-[420px] min-h-0",
-              "desktop-3"
-            )}
-          </div>
+        <div className="hidden h-full w-full sm:grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)_minmax(0,1fr)] grid-rows-2 gap-x-8 gap-y-8 px-8 md:px-14 lg:px-20 py-12 md:py-16">
+          {renderQuadrantButton(0, "col-start-1 row-start-1 h-full", "desktop-0")}
+          <div className="col-start-2 row-start-1 row-span-2 pointer-events-none" aria-hidden />
+          {renderQuadrantButton(1, "col-start-3 row-start-1 h-full", "desktop-1")}
+          {renderQuadrantButton(2, "col-start-1 row-start-2 h-full", "desktop-2")}
+          {renderQuadrantButton(3, "col-start-3 row-start-2 h-full", "desktop-3")}
         </div>
       )}
 
       {isFinalPair && (
-        <div className="hidden h-full w-full sm:flex items-center justify-between gap-8 px-8 md:px-14 lg:px-20 py-12 md:py-16">
-          {renderQuadrantButton(
-            0,
-            "sm:flex-1 sm:max-w-[360px] lg:max-w-[420px] min-h-[240px]",
-            "pair-0"
-          )}
-          {renderQuadrantButton(
-            1,
-            "sm:flex-1 sm:max-w-[360px] lg:max-w-[420px] min-h-[240px]",
-            "pair-1"
-          )}
+        <div className="hidden h-full w-full sm:grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)_minmax(0,1fr)] grid-rows-1 items-center gap-x-10 px-8 md:px-14 lg:px-20 py-12 md:py-16">
+          {renderQuadrantButton(0, "col-start-1 row-start-1 h-full", "pair-0")}
+          <div className="col-start-2 row-start-1 pointer-events-none" aria-hidden />
+          {renderQuadrantButton(1, "col-start-3 row-start-1 h-full", "pair-1")}
         </div>
       )}
     </div>
