@@ -14,7 +14,8 @@ interface Sample {
   x: number;
 }
 
-const DIRECTION_THRESHOLD = 35;
+const ACTIVATION_THRESHOLD = 55;
+const MAINTAIN_THRESHOLD = 20;
 const MAX_SAMPLE_INTERVAL = 500;
 const STABLE_DIRECTION_DURATION_MS = 3000;
 
@@ -70,14 +71,16 @@ export const Countdown = ({
           const center = sumRef.current / samplesRef.current.length;
           const averageX = (lastSample.x + x) / 2;
           const offset = averageX - center;
+          const magnitude = Math.abs(offset);
 
-          if (Math.abs(offset) >= DIRECTION_THRESHOLD) {
-            const direction: Direction = offset > 0 ? "right" : "left";
+          const offsetDirection: Direction = offset >= 0 ? "right" : "left";
+          const sameDirection = activeDirectionRef.current === offsetDirection;
 
-            setDetectedDirection((prev) => (prev === direction ? prev : direction));
+          if (magnitude >= ACTIVATION_THRESHOLD) {
+            setDetectedDirection((prev) => (prev === offsetDirection ? prev : offsetDirection));
 
-            if (activeDirectionRef.current !== direction) {
-              activeDirectionRef.current = direction;
+            if (!sameDirection) {
+              activeDirectionRef.current = offsetDirection;
               directionStartRef.current = now;
               setHoldDuration(0);
             } else if (directionStartRef.current != null) {
@@ -87,8 +90,18 @@ export const Countdown = ({
               if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
                 hasCompletedRef.current = true;
                 setIsTracking(false);
-                onComplete(direction);
+                onComplete(offsetDirection);
               }
+            }
+          } else if (sameDirection && magnitude >= MAINTAIN_THRESHOLD && directionStartRef.current != null) {
+            setDetectedDirection(offsetDirection);
+            const heldFor = now - directionStartRef.current;
+            setHoldDuration(heldFor);
+
+            if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
+              hasCompletedRef.current = true;
+              setIsTracking(false);
+              onComplete(offsetDirection);
             }
           } else {
             activeDirectionRef.current = null;
