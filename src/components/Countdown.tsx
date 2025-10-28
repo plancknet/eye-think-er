@@ -16,91 +16,44 @@ interface Sample {
 
 const DIRECTION_THRESHOLD = 35;
 const MAX_SAMPLE_INTERVAL = 500;
-const HIGHLIGHT_MIN_TIME = 250;
+const STABLE_DIRECTION_DURATION_MS = 3000;
 
 export const Countdown = ({
   quadrants,
   onComplete,
-  duration = 7,
   round,
 }: CountdownProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [count, setCount] = useState(duration);
-  const [isCountingDown, setIsCountingDown] = useState(false);
-  const [isTracking, setIsTracking] = useState(false);
+  const samplesRef = useRef<Sample[]>([]);
+  const lastSampleRef = useRef<Sample | null>(null);
+  const sumRef = useRef<number>(0);
+  const activeDirectionRef = useRef<Direction | null>(null);
+  const directionStartRef = useRef<number | null>(null);
+  const hasCompletedRef = useRef(false);
+
+  const [isTracking, setIsTracking] = useState(true);
   const [manualDirection, setManualDirection] = useState<Direction | null>(null);
-  const [inferredDirection, setInferredDirection] = useState<Direction | null>(null);
+  const [detectedDirection, setDetectedDirection] = useState<Direction | null>(null);
+  const [holdDuration, setHoldDuration] = useState<number>(0);
   const [debugCursor, setDebugCursor] = useState<{ x: number; y: number; opacity: number }>({
     x: 0,
     y: 0,
     opacity: 0,
   });
 
-  const samplesRef = useRef<Sample[]>([]);
-  const lastSampleRef = useRef<Sample | null>(null);
-  const directionTimesRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
-  const sumRef = useRef<number>(0);
-  const hasCompletedRef = useRef(false);
-
   useEffect(() => {
-    const startDelay = setTimeout(() => {
-      setIsTracking(true);
-      setIsCountingDown(true);
-    }, 1000);
-
-    return () => {
-      clearTimeout(startDelay);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isCountingDown) {
-      return;
-    }
-
-    if (count > 0) {
-      const timer = setTimeout(() => {
-        setCount((current) => current - 1);
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    }
-
-    if (hasCompletedRef.current) {
-      return;
-    }
-
-    hasCompletedRef.current = true;
-    setIsTracking(false);
-    setIsCountingDown(false);
-
-    const { left, right } = directionTimesRef.current;
-    const trackedDirection =
-      left === 0 && right === 0 ? null : right >= left ? "right" : "left";
-
-    const finalDirection =
-      manualDirection ??
-      trackedDirection ??
-      inferredDirection ??
-      (Math.random() > 0.5 ? "right" : "left");
-
-    setInferredDirection(finalDirection);
-    onComplete(finalDirection);
-  }, [count, isCountingDown, inferredDirection, manualDirection, onComplete]);
-
-  useEffect(() => {
-    if (!isTracking) {
-      samplesRef.current = [];
-      setInferredDirection(null);
-      return;
-    }
-
+    setIsTracking(true);
+    hasCompletedRef.current = false;
     samplesRef.current = [];
     lastSampleRef.current = null;
-    directionTimesRef.current = { left: 0, right: 0 };
     sumRef.current = 0;
+    activeDirectionRef.current = null;
+    directionStartRef.current = null;
+    setDetectedDirection(null);
+    setHoldDuration(0);
+
     const listener = (data: { x?: number } | null) => {
-      if (!data || typeof data.x !== "number") {
+      if (!data || typeof data.x !== "number" || hasCompletedRef.current) {
         return;
       }
 
@@ -119,30 +72,34 @@ export const Countdown = ({
           const offset = averageX - center;
 
           if (Math.abs(offset) >= DIRECTION_THRESHOLD) {
-            const offsetDirection: Direction = offset > 0 ? "right" : "left";
+            const direction: Direction = offset > 0 ? "right" : "left";
 
-            setInferredDirection((prev) => (prev === offsetDirection ? prev : offsetDirection));
+            setDetectedDirection((prev) => (prev === direction ? prev : direction));
 
-            if (offset > 0) {
-              directionTimesRef.current.right += elapsed;
-            } else {
-              directionTimesRef.current.left += elapsed;
+            if (activeDirectionRef.current !== direction) {
+              activeDirectionRef.current = direction;
+              directionStartRef.current = now;
+              setHoldDuration(0);
+            } else if (directionStartRef.current != null) {
+              const heldFor = now - directionStartRef.current;
+              setHoldDuration(heldFor);
+
+              if (heldFor >= STABLE_DIRECTION_DURATION_MS) {
+                hasCompletedRef.current = true;
+                setIsTracking(false);
+                onComplete(direction);
+              }
             }
+          } else {
+            activeDirectionRef.current = null;
+            directionStartRef.current = null;
+            setHoldDuration(0);
+            setDetectedDirection(null);
           }
         }
       }
 
       lastSampleRef.current = { time: now, x };
-
-      const { left, right } = directionTimesRef.current;
-      const dominant =
-        Math.max(left, right) >= HIGHLIGHT_MIN_TIME
-          ? right >= left
-            ? "right"
-            : "left"
-          : null;
-
-      setInferredDirection(dominant);
     };
 
     const webgazer = (window as any).webgazer;
@@ -156,23 +113,14 @@ export const Countdown = ({
         wg.setGazeListener(null);
       }
     };
-  }, [isTracking]);
-
-  useEffect(() => {
-    return () => {
-      const wg = (window as any).webgazer;
-      if (wg?.setGazeListener) {
-        wg.setGazeListener(null);
-      }
-    };
-  }, []);
+  }, [onComplete]);
 
   const highlightedDirection = useMemo<Direction | null>(() => {
     if (manualDirection) {
       return manualDirection;
     }
-    return inferredDirection;
-  }, [inferredDirection, manualDirection]);
+    return detectedDirection;
+  }, [detectedDirection, manualDirection]);
 
   const flattenedWords = useMemo(
     () => quadrants.flat().filter(Boolean).length,
@@ -221,7 +169,6 @@ export const Countdown = ({
       moveDebugCursor(null, false);
       return;
     }
-
     moveDebugCursor(highlightedDirection, true);
   }, [highlightedDirection, moveDebugCursor]);
 
@@ -231,6 +178,12 @@ export const Countdown = ({
 
   const handleManualChoice = (direction: Direction) => {
     setManualDirection(direction);
+    setHoldDuration(STABLE_DIRECTION_DURATION_MS);
+    if (!hasCompletedRef.current) {
+      hasCompletedRef.current = true;
+      setIsTracking(false);
+      onComplete(direction);
+    }
   };
 
   return (
@@ -242,7 +195,7 @@ export const Countdown = ({
         quadrants={quadrants}
         highlightedDirection={highlightedDirection}
         onDirectionChoice={handleManualChoice}
-        isTracking={isTracking && count > 0}
+        isTracking={isTracking && !hasCompletedRef.current}
       />
 
       <div
@@ -258,17 +211,17 @@ export const Countdown = ({
             </p>
           )}
           <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-white/90">
-            {count > 0
-              ? "Movimente a cabeça para o lado da palavra escolhida"
-              : "Detectando movimento..."}
+            {isTracking
+              ? "Mantenha a cabeca apontada para o lado escolhido"
+              : "Processando escolha..."}
           </h2>
         </div>
 
         <div className="relative mt-8 sm:mt-10">
           <div className="absolute inset-0 rounded-full bg-primary/40 blur-3xl" />
           <div className="relative h-40 w-40 sm:h-52 sm:w-52 md:h-60 md:w-60 rounded-full bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center shadow-[0_0_60px_-10px_rgba(59,130,246,0.7)] border border-white/30">
-            <div className="text-5xl sm:text-6xl md:text-7xl font-black text-white">
-              {count > 0 ? count : "…"}
+            <div className="text-4xl sm:text-5xl md:text-6xl font-black text-white">
+              {Math.max(0, Math.ceil((STABLE_DIRECTION_DURATION_MS - holdDuration) / 1000))}
             </div>
           </div>
         </div>
