@@ -48,17 +48,17 @@ export const Countdown = ({ words, onComplete, duration = 3 }: CountdownProps) =
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="text-center py-8 space-y-4 animate-fade-in">
-        <h2 className="text-3xl font-bold">
+      <div className="text-center py-4 sm:py-6 md:py-8 space-y-3 sm:space-y-4 animate-fade-in">
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold px-4">
           {count > 0 ? 'Fixe seu olhar na palavra escolhida' : 'Lendo sua mente...'}
         </h2>
         {count > 0 && (
-          <div className="text-8xl font-bold text-primary animate-pulse-glow">
+          <div className="text-6xl sm:text-7xl md:text-8xl font-bold text-primary animate-pulse-glow">
             {count}
           </div>
         )}
         {count === 0 && (
-          <div className="text-6xl animate-pulse">🧠✨</div>
+          <div className="text-5xl sm:text-6xl animate-pulse">🧠✨</div>
         )}
       </div>
       
