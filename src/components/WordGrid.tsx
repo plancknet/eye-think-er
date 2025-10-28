@@ -81,7 +81,7 @@ export const WordGrid = ({ words, onQuadrantDetected, highlightQuadrant, isCount
   };
 
   return (
-    <div className="grid grid-cols-2 gap-4 w-full h-[calc(100vh-8rem)] p-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-4 w-full h-[calc(100vh-12rem)] sm:h-[calc(100vh-8rem)] p-2 sm:p-4">
       {[0, 1, 2, 3].map((quadrant) => {
         const quadrantWords = getQuadrantWords(quadrant);
         const highlighted = isHighlighted(quadrant);
@@ -94,20 +94,21 @@ export const WordGrid = ({ words, onQuadrantDetected, highlightQuadrant, isCount
             onMouseLeave={() => setHoveredQuadrant(null)}
             className={`
               ${quadrantClasses[quadrant]}
-              rounded-3xl p-8 flex items-center justify-center
+              rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 flex items-center justify-center
               transition-all duration-300
-              ${highlighted ? 'scale-105 shadow-2xl ring-4 ring-white/50' : 'scale-100'}
+              ${highlighted ? 'scale-105 shadow-2xl ring-2 sm:ring-4 ring-white/50' : 'scale-100'}
               ${isCountingDown ? 'cursor-default' : 'cursor-pointer hover:scale-105'}
+              min-h-[120px] sm:min-h-0
             `}
           >
-            <div className="space-y-4 text-center">
+            <div className="space-y-2 sm:space-y-4 text-center">
               {quadrantWords.map((word, idx) => (
                 <div
                   key={idx}
                   className={`
-                    text-white font-bold backdrop-blur-sm bg-black/20 rounded-xl p-4
+                    text-white font-bold backdrop-blur-sm bg-black/20 rounded-lg sm:rounded-xl p-2 sm:p-4
                     transition-all duration-300
-                    ${words.length === 4 ? 'text-5xl px-8 py-6' : 'text-3xl'}
+                    ${words.length === 4 ? 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl px-3 py-2 sm:px-6 sm:py-4 md:px-8 md:py-6' : 'text-xl sm:text-2xl md:text-3xl'}
                     ${highlighted ? 'scale-110' : 'scale-100'}
                   `}
                 >
