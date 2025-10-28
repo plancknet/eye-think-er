@@ -24,11 +24,17 @@ export const Countdown = ({
   duration = 7,
   round,
 }: CountdownProps) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [count, setCount] = useState(duration);
   const [isCountingDown, setIsCountingDown] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [manualDirection, setManualDirection] = useState<Direction | null>(null);
   const [inferredDirection, setInferredDirection] = useState<Direction | null>(null);
+  const [debugCursor, setDebugCursor] = useState<{ x: number; y: number; visible: boolean }>({
+    x: 0,
+    y: 0,
+    visible: false,
+  });
 
   const samplesRef = useRef<Sample[]>([]);
   const lastSampleRef = useRef<Sample | null>(null);
@@ -169,18 +175,61 @@ export const Countdown = ({
     [quadrants]
   );
 
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) {
+      setDebugCursor((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    if (!highlightedDirection) {
+      setDebugCursor((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const targetX =
+      highlightedDirection === "left"
+        ? rect.left + rect.width * 0.2
+        : rect.right - rect.width * 0.2;
+    const targetY = rect.top + rect.height * 0.5;
+
+    setDebugCursor({
+      x: targetX,
+      y: targetY,
+      visible: true,
+    });
+
+    const simulatedMove = new MouseEvent("mousemove", {
+      clientX: targetX,
+      clientY: targetY,
+      bubbles: true,
+    });
+    window.dispatchEvent(simulatedMove);
+  }, [highlightedDirection]);
+
   const handleManualChoice = (direction: Direction) => {
     setManualDirection(direction);
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-background">
+    <div
+      ref={containerRef}
+      className="relative min-h-screen w-full overflow-hidden bg-background"
+    >
       <WordGrid
         quadrants={quadrants}
         highlightedDirection={highlightedDirection}
         onDirectionChoice={handleManualChoice}
         isTracking={isTracking && count > 0}
       />
+
+      {debugCursor.visible && (
+        <div
+          className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/40 shadow-lg transition-all duration-300"
+          style={{ left: debugCursor.x, top: debugCursor.y }}
+        />
+      )}
 
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6">
         <div className="space-y-4 text-center max-w-xl animate-fade-in">
