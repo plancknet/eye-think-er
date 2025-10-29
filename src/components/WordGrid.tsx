@@ -42,13 +42,36 @@ export const WordGrid = ({
 }: WordGridProps) => {
   const [hoveredDirection, setHoveredDirection] = useState<Direction | null>(null);
 
-  const paddedQuadrants = useMemo<string[][]>(() => {
-    if (quadrants.length >= 4) return quadrants.slice(0, 4);
-    const result = Array.from({ length: 4 }, (_, idx) => quadrants[idx] ?? []);
-    return result;
-  }, [quadrants]);
-
   const directionByQuadrant = useMemo<Direction[]>(() => ["left", "right", "left", "right"], []);
+
+  const totalWords = useMemo(
+    () => quadrants.reduce((sum, words) => sum + words.length, 0),
+    [quadrants],
+  );
+
+  const isTwoWordMode = totalWords === 2;
+
+  const displayQuadrants = useMemo(
+    () =>
+      isTwoWordMode
+        ? [0, 1].map((quadrantIndex) => ({
+            words: quadrants[quadrantIndex] ?? [],
+            quadrantIndex,
+            style: { ...QUADRANT_SIZE } as CSSProperties,
+          }))
+        : (quadrants.length >= 4 ? quadrants.slice(0, 4) : Array.from({ length: 4 }, (_, idx) => quadrants[idx] ?? [])).map(
+            (words, quadrantIndex) => ({
+              words,
+              quadrantIndex,
+              style: {
+                position: "absolute" as const,
+                ...QUADRANT_SIZE,
+                ...QUADRANT_POSITIONS[quadrantIndex],
+              } as CSSProperties,
+            }),
+          ),
+    [isTwoWordMode, quadrants],
+  );
 
   const activeHighlight = useMemo<Direction | null>(() => {
     if (highlightedDirection) return highlightedDirection;
@@ -72,19 +95,18 @@ export const WordGrid = ({
     setHoveredDirection(null);
   };
 
+  const containerClassName = isTwoWordMode
+    ? "relative flex h-full w-full items-center justify-center gap-6 sm:gap-10"
+    : "relative h-full w-full";
+
   return (
     <div className="word-grid-container pointer-events-auto absolute inset-0 z-10">
-      <div className="relative h-full w-full">
-        {paddedQuadrants.map((words, quadrantIndex) => {
-          const highlighted = activeHighlight === directionByQuadrant[quadrantIndex];
+      <div className={containerClassName}>
+        {displayQuadrants.map(({ words, quadrantIndex, style }) => {
+          const direction = directionByQuadrant[quadrantIndex] ?? "left";
+          const highlighted = activeHighlight === direction;
           const quadrantClass = quadrantClasses[quadrantIndex % quadrantClasses.length];
           const wordFontClass = getWordFontClass(words.length);
-
-          const style: CSSProperties = {
-            position: "absolute",
-            ...QUADRANT_SIZE,
-            ...QUADRANT_POSITIONS[quadrantIndex],
-          };
 
           const contentJustifyClass =
             words.length > 2 ? "justify-between" : "justify-center";
