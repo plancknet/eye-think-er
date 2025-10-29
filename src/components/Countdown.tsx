@@ -11,11 +11,12 @@ interface CountdownProps {
 
 const HEAD_ROTATION_THRESHOLD = 0.07;
 const STABLE_DIRECTION_DURATION_MS = 3000;
-const VIDEO_WIDTH = 1280;
-const VIDEO_HEIGHT = 720;
+const IDEAL_VIDEO_WIDTH = 640;
+const IDEAL_VIDEO_HEIGHT = 480;
 const VISION_WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
 const MODEL_ASSET_PATH =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const SHOW_DEBUG_CURSOR = false;
 
 let faceLandmarkerInstance: FaceLandmarker | null = null;
 let faceLandmarkerPromise: Promise<FaceLandmarker> | null = null;
@@ -28,15 +29,31 @@ const loadFaceLandmarker = async () => {
   if (!faceLandmarkerPromise) {
     faceLandmarkerPromise = (async () => {
       const vision = await FilesetResolver.forVisionTasks(VISION_WASM_PATH);
-      faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: MODEL_ASSET_PATH,
-          delegate: "GPU",
-        },
-        runningMode: "VIDEO",
-        numFaces: 1,
-      });
-      return faceLandmarkerInstance;
+      try {
+        faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: MODEL_ASSET_PATH,
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+        });
+        return faceLandmarkerInstance;
+      } catch (gpuError) {
+        console.warn(
+          "[Countdown] GPU delegate unavailable, falling back to CPU for face landmarker.",
+          gpuError
+        );
+        faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: MODEL_ASSET_PATH,
+            delegate: "CPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+        });
+        return faceLandmarkerInstance;
+      }
     })();
   }
 
@@ -53,30 +70,42 @@ const getSharedVideoElement = async () => {
 
   if (!sharedVideoPromise) {
     sharedVideoPromise = (async () => {
+      const existingWebgazerVideo =
+        (document.getElementById("webgazerVideoFeed") as HTMLVideoElement | null) ??
+        ((window as any).webgazer?.webcam?.videoElement as HTMLVideoElement | null) ??
+        null;
+
+      if (existingWebgazerVideo?.srcObject instanceof MediaStream) {
+        sharedVideoElement = existingWebgazerVideo;
+        return existingWebgazerVideo;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
-          width: VIDEO_WIDTH,
-          height: VIDEO_HEIGHT,
+          width: { ideal: IDEAL_VIDEO_WIDTH },
+          height: { ideal: IDEAL_VIDEO_HEIGHT },
         },
       });
 
-      const video = document.createElement("video");
-      video.autoplay = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = stream;
-      video.style.position = "fixed";
-      video.style.opacity = "0";
-      video.style.pointerEvents = "none";
-      video.style.width = "1px";
-      video.style.height = "1px";
+      const targetVideo = existingWebgazerVideo ?? document.createElement("video");
+      targetVideo.autoplay = true;
+      targetVideo.muted = true;
+      targetVideo.playsInline = true;
+      targetVideo.srcObject = stream;
 
-      document.body.appendChild(video);
+      if (!existingWebgazerVideo) {
+        targetVideo.style.position = "fixed";
+        targetVideo.style.opacity = "0";
+        targetVideo.style.pointerEvents = "none";
+        targetVideo.style.width = "1px";
+        targetVideo.style.height = "1px";
+        document.body.appendChild(targetVideo);
+      }
 
-      await video.play();
-      sharedVideoElement = video;
-      return video;
+      await targetVideo.play();
+      sharedVideoElement = targetVideo;
+      return targetVideo;
     })();
   }
 
@@ -238,6 +267,10 @@ export const Countdown = ({
 
   const moveDebugCursor = useCallback(
     (direction: Direction | null, visible: boolean) => {
+      if (!SHOW_DEBUG_CURSOR) {
+        return;
+      }
+
       const element = containerRef.current;
       if (!element) return;
 
@@ -307,10 +340,12 @@ export const Countdown = ({
         isTracking={isTracking && !hasCompletedRef.current}
       />
 
-      <div
-        className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/60 shadow-lg transition-transform duration-300"
-        style={{ left: debugCursor.x, top: debugCursor.y, opacity: debugCursor.opacity }}
-      />
+      {SHOW_DEBUG_CURSOR && (
+        <div
+          className="pointer-events-none absolute z-30 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/80 bg-white/60 shadow-lg transition-transform duration-300"
+          style={{ left: debugCursor.x, top: debugCursor.y, opacity: debugCursor.opacity }}
+        />
+      )}
 
       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6">
         <div className="space-y-4 text-center max-w-xl animate-fade-in">
