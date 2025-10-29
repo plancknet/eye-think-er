@@ -1,77 +1,49 @@
 # syntax=docker/dockerfile:1.6
 
 ############################
-# FASE: deps
-# - Gera package-lock.json dentro do container
-# - Instala deps com npm ci usando o lock recém-gerado
+# FASE: deps (com devDeps)
+# - Gera package-lock dentro do container
+# - Instala deps + devDeps (precisamos do Vite no build)
 ############################
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Derruba cache da camada de deps quando o SHA do commit mudar (EasyPanel já passa --build-arg GIT_SHA=...)
+# invalida cache quando o SHA mudar (EasyPanel já passa --build-arg GIT_SHA=...)
 ARG GIT_SHA
 ENV GIT_SHA=$GIT_SHA
-ENV NODE_ENV=production
 
+# NÃO defina NODE_ENV=production aqui, senão devDeps (vite) não entram
 # Cache do npm para builds mais rápidos
 RUN --mount=type=cache,target=/root/.npm true
 
-# Copiamos apenas o package.json para evitar desencontro com um lock antigo do repositório
+# Use somente o package.json para gerar o lock "fresco"
 COPY package.json ./
 
-# 1) Gera um package-lock.json compatível SEM instalar módulos na pasta (apenas resolve versões)
+# 1) gera package-lock
 RUN --mount=type=cache,target=/root/.npm npm install --package-lock-only
 
-# 2) Instala exatamente o que está no lock gerado acima
-RUN --mount=type=cache,target=/root/.npm npm ci
+# 2) instala TAMBÉM devDependencies
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev
 
 ############################
 # FASE: build
-# - Copia node_modules resolvidos
-# - Copia código-fonte
-# - Compila com Vite
+# - Copia node_modules (com devDeps)
+# - Copia código e compila com Vite
 ############################
 FROM node:20-alpine AS build
 WORKDIR /app
-ENV NODE_ENV=production
 
-# Usa os módulos já instalados na fase deps
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copia o restante do projeto (inclui src, vite.config, tsconfig, public, etc.)
+COPY --from=deps /app/package-lock.json ./package-lock.json
 COPY . .
 
-# Diagnóstico (não falha o build se o pacote não aparecer, mas ajuda a depurar)
-RUN node -v && npm -v && npm ls @mediapipe/tasks-vision || true
+# Diagnóstico útil
+RUN node -v && npm -v && npm ls vite || true
 
-# Build da SPA
+# Build da SPA (vite está em devDependencies)
 RUN npm run build
 
 ############################
 # FASE: runtime (Nginx)
-# - Sobe conteúdo estático de /dist
-# - SPA fallback (try_files)
-# - COOP/COEP para WASM com threads (se não precisar, remova os add_header)
-############################
-FROM nginx:1.27-alpine AS runtime
-
-# Copia o build final
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Substitui a config padrão por uma com SPA fallback e headers úteis ao WASM
-RUN printf 'server {\n\
-  listen 80;\n\
-  server_name _;\n\
-  root /usr/share/nginx/html;\n\
-  include /etc/nginx/mime.types;\n\
-  add_header Cross-Origin-Opener-Policy same-origin;\n\
-  add_header Cross-Origin-Embedder-Policy require-corp;\n\
-  location / {\n\
-    try_files $uri $uri/ /index.html;\n\
-  }\n\
-  location ~* \\.(wasm|wasm.gz)$ {\n\
-    types { application/wasm wasm; }\n\
-    default_type application/wasm;\n\
-    add_header Cross-Origin-Resource-Policy cross-origin;\n\
-  }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+# - Serve conteúdo estático
+# - SPA fallback +
