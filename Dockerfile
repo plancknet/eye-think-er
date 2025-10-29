@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-############################
+#############################
 # FASE: deps (gera lock e instala deps + devDeps)
 ############################
 FROM node:20-alpine AS deps
